@@ -1,0 +1,148 @@
+import pygame
+import random
+from enum import Enum
+
+# Initialize Pygame
+pygame.init()
+
+# Constants
+WINDOW_SIZE = 600
+CELL_SIZE = 20
+CELL_COUNT = WINDOW_SIZE // CELL_SIZE
+FPS = 10
+
+# Colors
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+WHITE = (255, 255, 255)
+
+class Direction(Enum):
+    UP = (0, -1)
+    DOWN = (0, 1)
+    LEFT = (-1, 0)
+    RIGHT = (1, 0)
+
+class Snake:
+    def __init__(self):
+        self.body = [(CELL_COUNT // 2, CELL_COUNT // 2)]
+        self.direction = Direction.RIGHT
+        self.grow_flag = False
+    
+    def move(self):
+        head = self.body[0]
+        dx, dy = self.direction.value
+        new_head = (head[0] + dx, head[1] + dy)
+        
+        # Check boundaries (wrap around)
+        new_head = (new_head[0] % CELL_COUNT, new_head[1] % CELL_COUNT)
+        
+        self.body.insert(0, new_head)
+        
+        if not self.grow_flag:
+            self.body.pop()
+        else:
+            self.grow_flag = False
+    
+    def grow(self):
+        self.grow_flag = True
+    
+    def check_collision(self):
+        head = self.body[0]
+        return head in self.body[1:]
+    
+    def change_direction(self, new_direction):
+        # Prevent reversing into itself
+        opposite = {
+            Direction.UP: Direction.DOWN,
+            Direction.DOWN: Direction.UP,
+            Direction.LEFT: Direction.RIGHT,
+            Direction.RIGHT: Direction.LEFT
+        }
+        if new_direction != opposite.get(self.direction):
+            self.direction = new_direction
+
+class Food:
+    def __init__(self):
+        self.position = self.randomize()
+    
+    def randomize(self):
+        return (random.randint(0, CELL_COUNT - 1), 
+                random.randint(0, CELL_COUNT - 1))
+    
+    def respawn(self, snake_body):
+        while True:
+            self.position = self.randomize()
+            if self.position not in snake_body:
+                break
+
+class Game:
+    def __init__(self):
+        self.screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
+        pygame.display.set_caption("Snake Game")
+        self.clock = pygame.time.Clock()
+        self.font = pygame.font.Font(None, 36)
+        self.reset()
+    
+    def reset(self):
+        self.snake = Snake()
+        self.food = Food()
+        self.score = 0
+        self.running = True
+        self.game_over = False
+    
+    def handle_input(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+            elif event.type == pygame.KEYDOWN:
+                if self.game_over and event.key == pygame.K_SPACE:
+                    self.reset()
+                elif not self.game_over:
+                    key_map = {
+                        pygame.K_UP: Direction.UP,
+                        pygame.K_DOWN: Direction.DOWN,
+                        pygame.K_LEFT: Direction.LEFT,
+                        pygame.K_RIGHT: Direction.RIGHT
+                    }
+                    if event.key in key_map:
+                        self.snake.change_direction(key_map[event.key])
+    
+    def update(self):
+        if not self.game_over:
+            self.snake.move()
+            
+            # Check food collision
+            if self.snake.body[0] == self.food.position:
+                self.snake.grow()
+                self.food.respawn(self.snake.body)
+                self.score += 10
+            
+            # Check self collision
+            if self.snake.check_collision():
+                self.game_over = True
+    
+    def draw(self):
+        self.screen.fill(BLACK)
+        
+        # Draw snake
+        for segment in self.snake.body:
+            rect = pygame.Rect(segment[0] * CELL_SIZE, segment[1] * CELL_SIZE, 
+                             CELL_SIZE - 2, CELL_SIZE - 2)
+            pygame.draw.rect(self.screen, GREEN, rect)
+        
+        # Draw food
+        food_rect = pygame.Rect(self.food.position[0] * CELL_SIZE, 
+                               self.food.position[1] * CELL_SIZE, 
+                               CELL_SIZE - 2, CELL_SIZE - 2)
+        pygame.draw.rect(self.screen, RED, food_rect)
+        
+        # Draw score
+        score_text = self.font.render(f"Score: {self.score}", True, WHITE)
+        self.screen.blit(score_text, (10, 10))
+        
+        # Draw game over message
+        if self.game_over:
+            game_over_text = self.font.render("Game Over! Press SPACE to restart", True, WHITE)
+            text_rect = game_over_text.get_rect(center=(WINDOW_SIZE // 2, WINDOW_SIZE // 2))
+            self.screen.blit(game_over_text, text_rect)
